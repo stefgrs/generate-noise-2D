@@ -1,4 +1,4 @@
-# script to generate pink noise
+# script to generate 2D noise (pink, brown, etc.)
 # generates white noise movies with limited spatial and temporal
 #%% frequency, via inverse fourier transform
 #%% typical parameters
@@ -6,6 +6,9 @@
 #%% tempfreq = 5
 #%% contrast_sigma = .75
 #%% duratio = 5 (mins)
+
+# Also, generate sum of gaussians and write analytical formula
+# Plus, generate analytical formula for 2d velocity field
 
 # imports
 import numpy as np
@@ -50,16 +53,6 @@ def sixth(ax,ay):
 	ax = ax*np.sign(np.random.randn())
 	ay = 0
 	return ax,ay
-	
-#def seventh(ax,ay):
-#	ax = ax
-#	ay = 0
-#	return ax,ay
-
-#def eight(ax,ay):
-#	ax = -ax
-#	ay = 0
-#	return ax,ay
 
 options = {0: first, 1: second, 2: third, 3: fourth, 4: fifth, 5: sixth}
 
@@ -67,13 +60,13 @@ options = {0: first, 1: second, 2: third, 3: fourth, 4: fifth, 5: sixth}
 random noise class
 '''
 class noisyS:
-	def __init__(self, imsize = 64, maxSF=8, alpha=-1, contrastSigma=.3, ds = 3, solverdir = '/home/sg6513/nektar++/build/dist/bin'):
+	def __init__(self, imsize = 64, maxSF=8, alpha=-1, contrastSigma=.3, ds = 3, solverdir = '/home/user'):
 		self.imsize = imsize
 		self.maxSF = maxSF
 		self.alpha = alpha
 		self.cSigma = contrastSigma
 		self.data = np.zeros((imsize,imsize))
-		self.ds = ds # full domain size. This is hardcoded (kind of)!
+		self.ds = ds 
 		self.solverdir = solverdir
 		np.random.seed()
 
@@ -121,11 +114,7 @@ class noisyS:
 		invFFT = np.zeros((self.imsize,self.imsize),dtype=np.complex64)
 		mu = np.zeros((sizeRng,sizeRng))
 		sig = np.ones((sizeRng,sizeRng))
-		#print(spaceRange)
-		#
-		#print(use.shape)
-		#print(npr.randn(sizeRng,sizeRng).shape)
-		#print(np.exp(2*np.pi*1j*npr.rand(sizeRng, sizeRng)).shape)
+		
 		invFFT[spaceRange[0]:spaceRange[1], spaceRange[0]:spaceRange[1]] = use * npr.randn(sizeRng,sizeRng) * np.exp(2*np.pi*1j*npr.rand(sizeRng, sizeRng))
 		use = None
 
@@ -139,16 +128,9 @@ class noisyS:
 
 		invFFT[halfsize+1:fullspace[1], halfsize] = invFFT[halfsize-1:backspace[0]:-1, halfsize].conj()
 
-#		%     figure
-#		%     imagesc(abs(invFFT(:,:,nframes/2+1)));
-#		%     figure
-#		%     imagesc(angle(invFFT(:,:,nframes/2)));
-
-#		%     pack
 		invFFT = npf.ifftshift(invFFT)
-#		clear invFFT;
 
-		### invert FFT and scale it to 0 - 255
+		### invert FFT
 
 		imraw = npf.ifftn(invFFT).real
 		#print(np.imag(npf.ifftn(invFFT)).max(),np.real(npf.ifftn(invFFT)).max())
@@ -157,10 +139,9 @@ class noisyS:
 		immin = -1*immax
 		# here is normalised. There is going to be a certain amount of pixels that are outside of 0 to 1
 		# range: those are the ones that needs to be saturated.
-		# I don't care much about the scale, since I'll augment the data by scaling anyway
 		imraw = (imraw - immin-immean) / (immax - immin)
 		#data = (np.floor(imraw*255)+1).astype(np.uint8)
-		#print(imraw.min(),imraw.max())
+		
 		data = np.clip(imraw,0,1).astype(np.float32)
 		imraw = None
 		
@@ -183,6 +164,7 @@ class noisyS:
 		return (newdata,int(newsize))
 		
 	def interpolate_noise(self, mode = 'size', newsize = (128,128), pts = -1, extra = None):
+		# untested routine. There might be bugs
 		if pts == -1:
 			# don't use points
 			mode = 'size'
@@ -222,21 +204,6 @@ class noisyS:
 		else:
 			return (interpolator.ev(xnew,ynew),xnew,ynew)
 			
-	def write2ptsfile(self,meshfile = '../Meshes/mysquaremesh10', ptsfile = 'tryptsfile', rstfile = 'tryinterp'):
-		# regular pixels grid: values at the pixels borders
-		halfds = self.ds/2
-		N = self.imsize
-		xb = np.linspace(-halfds,halfds,N+1)
-		yb = np.linspace(-halfds,halfds,N+1)
-
-		# regular pixels grid: values at the pixels centers
-		x = (xb[1:] + xb[0:N])/2
-		y = (yb[1:] + yb[0:N])/2
-
-		icdir = ''
-		meshutils.writeu2pts(self.data,x,y,ptsfile)
-		meshutils.pts2rst(meshfile,ptsfile,rstfile,self.solverdir)
-
 '''
 Sum of Gaussians generator
 '''
@@ -260,7 +227,7 @@ def generate_gaussians(Ngs,pr):
 			U0.gamma[ii] = round2digit(pr.ming + pr.rg*np.random.rand(),3)
 			U0.sigma[ii] = round2digit(pr.mins + pr.rs*np.random.rand(),3)
 			U0.A[ii] = round2digit((pr.meanA + pr.rA*np.random.rand())*np.sign(np.random.rand()),3)
-			#print(np.min(np.abs(x0[ii]-x0[0:ii])))#,np.min(np.abs(y0[ii]-y0[0:ii])),np.max(sigma))
+			
 			if min(abs(U0.x0[ii]-U0.x0[0:ii]))>.1 and min(abs(U0.y0[ii]-U0.y0[0:ii]))>.1 and max(U0.sigma)>.25:
 				flag = 0
 			else:
